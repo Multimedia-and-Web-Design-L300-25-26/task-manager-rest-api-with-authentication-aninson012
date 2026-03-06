@@ -3,6 +3,9 @@ import app from "../src/app.js";
 
 let token;
 let taskId;
+let otherUserToken;
+const email = `task+${Date.now()}@example.com`;
+const otherEmail = `task-other+${Date.now()}@example.com`;
 
 beforeAll(async () => {
   // Register
@@ -10,7 +13,7 @@ beforeAll(async () => {
     .post("/api/auth/register")
     .send({
       name: "Task User",
-      email: "task@example.com",
+      email,
       password: "123456"
     });
 
@@ -18,11 +21,30 @@ beforeAll(async () => {
   const res = await request(app)
     .post("/api/auth/login")
     .send({
-      email: "task@example.com",
+      email,
       password: "123456"
     });
 
   token = res.body.token;
+
+  // Register second user
+  await request(app)
+    .post("/api/auth/register")
+    .send({
+      name: "Other User",
+      email: otherEmail,
+      password: "123456"
+    });
+
+  // Login second user
+  const otherRes = await request(app)
+    .post("/api/auth/login")
+    .send({
+      email: otherEmail,
+      password: "123456"
+    });
+
+  otherUserToken = otherRes.body.token;
 });
 
 describe("Task Routes", () => {
@@ -56,6 +78,23 @@ describe("Task Routes", () => {
 
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it("should not allow non-owner to delete a task", async () => {
+    const res = await request(app)
+      .delete(`/api/tasks/${taskId}`)
+      .set("Authorization", `Bearer ${otherUserToken}`);
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("should allow owner to delete a task", async () => {
+    const res = await request(app)
+      .delete(`/api/tasks/${taskId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.message).toBe("Task deleted successfully");
   });
 
 });
